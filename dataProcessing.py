@@ -3,6 +3,7 @@ import serial
 import threading
 from sqlalchemy import create_engine, text
 import os
+import pandas as pd
 
 # Configuración de la base de datos
 db_config = {
@@ -47,8 +48,41 @@ def insertar_datos(sensor, temperatura=None, humedad=None):
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                 })
         print(f"Datos insertados en la base de datos: {sensor}, {temperatura}, {humedad}")
+        connection.close()
     except Exception as e:
         print(f"Error general: {e}")
+
+# Creación de archivos JSON y envío de datos al servidor remoto
+def datos_json():
+    try:
+        conn = f"mariadb+mariadbconnector://{db_config['user']}:{db_config['password']}@{db_config['host']}/{db_config['database']}"
+        engine = create_engine(conn)
+        query = "SELECT * FROM sensores_data"
+        df = pd.read_sql(query,conn)
+        df.to_json('/home/miguel/Desktop/Programas/sensores_data.json', orient='records', indent=4)
+
+        engine = create_engine(conn)
+        query = "SELECT * FROM sensores_data2"
+        df = pd.read_sql(query,conn)
+        df.to_json('/home/miguel/Desktop/Programas/sensores_data2.json', orient='records', indent=4)
+    except Exception as e:
+        print(f"Error general: {e}")
+
+    servidor = "xxxxxxx" 
+    ruta_html = "xxxxxx"  
+    ruta_css = "xxxxxxx"
+    contrasena = "xxxxxxx"
+
+    comando = f"sshpass -p '{contrasena}' scp sensores_data.json {servidor}:{ruta_html}"
+    resultado = os.system(comando)
+
+    comando = f"sshpass -p '{contrasena}' scp sensores_data2.json {servidor}:{ruta_css}"
+    resultado = os.system(comando)
+
+    if resultado == 0:
+        print("Conexión con servidor Web correcta")
+    else:
+        print("Error al enviar el archivo HTML al servidor.")
 
 # Hilo 1 - Sensor DHT22
 def esp32dth11():
@@ -67,6 +101,7 @@ def esp32dth11():
                             print(f"Datos no válidos: {data}")
                     except ValueError:
                         print(f"Error al procesar los datos: {data}")
+                    datos_json()
                     time.sleep(180)
     except serial.SerialException as e:
         print(f"Error con el puerto serie: {e}")
@@ -84,6 +119,7 @@ def esp32ky001():
                     print(data)
                     if data:
                         insertar_datos("KY-001", temperatura=data)
+                    datos_json()
                     time.sleep(180)
     except serial.SerialException as e:
         print(f"Error con el puerto serie: {e}")
